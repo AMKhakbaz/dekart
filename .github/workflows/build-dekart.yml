@@ -1,0 +1,36 @@
+name: Build and Save Dekart Docker Image
+
+on:
+  workflow_dispatch: # Allows you to run the workflow manually from GitHub
+  # schedule:
+  #   - cron: '0 0 * * 0' # Optional: Runs automatically every week
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          repository: dekart-xyz/dekart
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: dekart-custom:latest
+
+      - name: Save Docker image as tar.gz
+        run: |
+          docker save dekart-custom:latest | gzip > dekart-custom.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dekart-image
+          path: dekart-custom.tar.gz
+          retention-days: 7
