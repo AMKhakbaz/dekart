@@ -36,13 +36,13 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           driver-opts: |
             image=moby/buildkit:latest
@@ -95,32 +95,36 @@ jobs:
           echo -e "$ARGS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Build and push APP image
+      - name: Build and load APP image
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ inputs.push_to_registry }}
-          load: ${{ !inputs.push_to_registry && inputs.save_artifact }}
-          tags: ${{ steps.meta.outputs.tags }}
+          push: false
+          load: true
+          tags: dekartxyz/dekart:${{ github.sha }}
           build-args: ${{ steps.build_args.outputs.args }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Save Docker image
-        if: ${{ !inputs.push_to_registry && inputs.save_artifact }}
+        if: ${{ inputs.save_artifact }}
         run: |
+          echo "Available images:"
+          docker images
+          echo "Saving image dekartxyz/dekart:${{ github.sha }}"
           docker save dekartxyz/dekart:${{ github.sha }} | gzip > dekart-${{ inputs.target }}.tar.gz
           ls -lh dekart-${{ inputs.target }}.tar.gz
 
       - name: Upload Docker image artifact
-        if: ${{ !inputs.push_to_registry && inputs.save_artifact }}
+        if: ${{ inputs.save_artifact }}
         uses: actions/upload-artifact@v4
         with:
           name: dekart-docker-image-${{ inputs.target }}
           path: dekart-${{ inputs.target }}.tar.gz
           retention-days: 7
           compression-level: 0
+          overwrite: true
 
       - name: Generate Docker Compose file
         run: |
@@ -273,6 +277,16 @@ jobs:
           name: dekart-docker-compose-${{ inputs.target }}
           path: ./output/
           retention-days: 7
+          overwrite: true
+
+      - name: Debug - List output files
+        run: |
+          echo "=== Output directory contents ==="
+          ls -la ./output/
+          echo "=== docker-compose.yml content ==="
+          cat ./output/docker-compose.yml
+          echo "=== .env.example content ==="
+          cat ./output/.env.example
 
       - name: Build Summary
         run: |
