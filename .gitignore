@@ -1,58 +1,46 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-./server
+```
+# Dependencies
+node_modules/
 
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# production
-/build
-
-# dot env
+# Environment
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# npm
-npm-debug.log*
-
-.eslintcache
-.npmrc
-
-# cypress
-cypress/videos
-cypress/screenshots
-cypress/fixtures/POI25Mb.csv
-cypress/fixtures/POI67Mb.csv
-cypress/fixtures/*.large.csv
-
-# IDE
-.idea
-testtmp*
-
 .env.*
-data
-keys/license-private.pem
-keys/device-auth-private.pem
-keys/device-auth-public.pem
+
+# Editors
+.vscode/
+.idea/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-selfcheck.json
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.gradle/
+.DS_Store
+Thumbs.db
+```
