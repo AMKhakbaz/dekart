@@ -11,9 +11,16 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Create .npmrc for GitHub packages
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > .npmrc
+          echo "@dekart-xyz:registry=https://npm.pkg.github.com" >> .npmrc
 
       - name: Create .env file for Docker Compose
         run: |
@@ -30,11 +37,17 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t dekart-custom:latest .
+          docker build --progress=plain -t dekart-custom:latest .
+
+      - name: Verify image was built
+        run: |
+          docker images | grep dekart-custom
+          docker history dekart-custom:latest
 
       - name: Save Docker image as tar.gz
         run: |
           docker save dekart-custom:latest | gzip > dekart-custom.tar.gz
+          ls -lh dekart-custom.tar.gz
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -42,3 +55,4 @@ jobs:
           name: dekart-image
           path: dekart-custom.tar.gz
           retention-days: 7
+          if-no-files-found: error

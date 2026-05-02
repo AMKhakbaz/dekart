@@ -1,5 +1,16 @@
 ```
-# GitHub workflow artifacts
-.github/
+# Environment
+.env
+.env.local
+.env.*
 
+# Dependencies
+node_modules/
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Editors
+.vscode/
 ```
