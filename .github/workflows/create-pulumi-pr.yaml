@@ -16,7 +16,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout dekart-cloud-deploy
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: ${{ github.repository_owner }}/dekart-cloud-deploy
           token: ${{ secrets.DEPLOY_REPO_TOKEN }}

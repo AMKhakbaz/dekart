@@ -46,6 +46,37 @@ Dekart is single Docker container that can be deployed to any cloud provider or 
 
 ⭐️ **Press GitHub Star to Get Notified of Updates**
 
+### Quick Start with Docker Compose
+
+For the fastest way to get started, use one of the pre-configured Docker Compose setups:
+
+```bash
+# Navigate to Docker Compose examples
+cd install/docker-compose
+
+# For BigQuery setup (requires GCP credentials)
+docker compose -f docker-compose.bigquery.yaml up -d
+
+# For Snowflake with SQLite (simplest for testing)
+docker compose -f docker-compose.snowflake-sqlite.yaml up -d
+
+# For local development (PostgreSQL + Adminer only)
+docker compose -f docker-compose.local.yaml up -d
+```
+
+See [install/docker-compose/README.md](install/docker-compose/README.md) for all available configurations.
+
+### Build Your Own Custom Image
+
+To build a custom Docker image with your specific configuration:
+
+1. Go to Actions → "Complete Docker Compose Build" workflow
+2. Click "Run workflow" and select your target (oss/premium/cloud)
+3. Download the generated artifacts (Docker image + Docker Compose files)
+4. Follow the included README for installation instructions
+
+See [DOCKER_COMPOSE_BUILD_GUIDE.md](DOCKER_COMPOSE_BUILD_GUIDE.md) for detailed instructions.
+
 ### Deployment Guides:
 
 - [Run with Docker](https://dekart.xyz/docs/self-hosting/docker/?ref=github)

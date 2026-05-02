@@ -1,58 +1,71 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-./server
+```
+# Logs and temp files
+*.log
+*.tmp
+*.swp
 
-# Test binary, built with `go test -c`
-*.test
-
-# Output of the go coverage tool, specifically when used with LiteIDE
-*.out
-
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.js
-
-# testing
-/coverage
-
-# production
-/build
-
-# dot env
+# Environment
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
+*.env.*
 
-# npm
-npm-debug.log*
+# Editors
+.vscode/
+.idea/
 
-.eslintcache
-.npmrc
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+dist/
+build/
+target/
+.gradle/
 
-# cypress
-cypress/videos
-cypress/screenshots
-cypress/fixtures/POI25Mb.csv
-cypress/fixtures/POI67Mb.csv
-cypress/fixtures/*.large.csv
+# OS generated files
+.DS_Store
+Thumbs.db
 
-# IDE
-.idea
-testtmp*
+# Compiled files
+*.pyc
+*.class
+*.o
+*.exe
+*.dll
+*.so
+*.a
+*.obj
+*.out
 
-.env.*
-data
-keys/license-private.pem
-keys/device-auth-private.pem
-keys/device-auth-public.pem
+# Coverage reports
+coverage/
+htmlcov/
+.coverage
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```

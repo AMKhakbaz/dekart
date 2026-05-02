@@ -1,0 +1,341 @@
+name: Complete Docker Compose Build
+
+permissions:
+  contents: read
+  packages: write
+  actions: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        type: choice
+        description: 'Build target'
+        options:
+          - oss
+          - premium
+          - cloud
+        default: 'oss'
+      push_to_registry:
+        type: boolean
+        description: 'Push to container registry'
+        default: false
+      save_artifact:
+        type: boolean
+        description: 'Save Docker image as artifact'
+        default: true
+
+env:
+  IMAGE_TAG: dekart-${{ github.event.inputs.target || 'oss' }}:${{ github.sha }}
+
+jobs:
+  build_complete:
+    runs-on: ubuntu-latest
+    outputs:
+      app_image: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
+
+      - name: Configure .npmrc
+        run: |
+          if [ -n "${{ secrets.NPM_GH_TOKEN }}" ]; then
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_GH_TOKEN }}" > .npmrc
+            echo "@dekart-xyz:registry=https://npm.pkg.github.com" >> .npmrc
+          else
+            echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > .npmrc
+            echo "@dekart-xyz:registry=https://npm.pkg.github.com" >> .npmrc
+          fi
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: dekartxyz/dekart
+          tags: |
+            type=sha,format=short,prefix=
+            type=raw,value=${{ env.IMAGE_TAG }}
+          flavor: latest=false
+
+      - name: Login to Docker Hub
+        if: ${{ inputs.push_to_registry && inputs.target == 'oss' }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
+        if: ${{ inputs.push_to_registry && (inputs.target == 'premium' || inputs.target == 'cloud') }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ secrets.PREMIUM_GHCR_USERNAME }}
+          password: ${{ secrets.PREMIUM_GHCR_TOKEN }}
+
+      - name: Build arguments
+        id: build_args
+        run: |
+          ARGS="DEKART_UX_DISABLE_VERSION_CHECK=1"
+          if [ "${{ inputs.target }}" = "premium" ] || [ "${{ inputs.target }}" = "cloud" ]; then
+            if [ -n "${{ secrets.DEKART_LICENSE_KEY }}" ]; then
+              ARGS="${ARGS}\nDEKART_LICENSE_KEY=${{ secrets.DEKART_LICENSE_KEY }}"
+            fi
+          fi
+          echo "args<<EOF" >> $GITHUB_OUTPUT
+          echo -e "$ARGS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Build and load APP image
+        id: build_app
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: dekartxyz/dekart:${{ github.sha }}
+          build-args: ${{ steps.build_args.outputs.args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+          outputs: type=docker,dest=/tmp/dekart-image.tar
+
+      - name: Verify Docker image was built
+        run: |
+          echo "=== Available Docker images ==="
+          docker images
+          echo "=== Checking for tar file ==="
+          ls -lh /tmp/dekart-image.tar
+          if [ ! -f /tmp/dekart-image.tar ]; then
+            echo "::error::Docker image tar file was not created!"
+            exit 1
+          fi
+          echo "=== Loading image from tar ==="
+          docker load -i /tmp/dekart-image.tar
+          echo "=== Verifying loaded image ==="
+          docker images dekartxyz/dekart:${{ github.sha }} --format "{{.Repository}}:{{.Tag}}"
+          if ! docker images dekartxyz/dekart:${{ github.sha }} --format "{{.Repository}}" | grep -q "dekartxyz/dekart"; then
+            echo "::error::Docker image was not loaded successfully!"
+            exit 1
+          fi
+
+      - name: Save Docker image
+        if: ${{ inputs.save_artifact }}
+        run: |
+          echo "Available images:"
+          docker images
+          echo "Compressing image..."
+          gzip -c /tmp/dekart-image.tar > dekart-${{ inputs.target }}.tar.gz
+          ls -lh dekart-${{ inputs.target }}.tar.gz
+
+      - name: Upload Docker image artifact
+        if: ${{ inputs.save_artifact }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dekart-docker-image-${{ inputs.target }}
+          path: |
+            dekart-${{ inputs.target }}.tar.gz
+          retention-days: 7
+          compression-level: 0
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Generate Docker Compose file
+        run: |
+          mkdir -p ./output
+          
+          # Create a ready-to-use docker-compose.yml
+          cat > ./output/docker-compose.yml << 'COMPOSE_EOF'
+          version: "3.9"
+          services:
+            db:
+              image: postgres:16
+              restart: unless-stopped
+              ports:
+                - "5432:5432"
+              environment:
+                POSTGRES_DB: "dekart"
+                POSTGRES_USER: "postgres"
+                POSTGRES_PASSWORD: "dekart"
+              volumes:
+                - dekart_db_data:/var/lib/postgresql/data
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                interval: 5s
+                timeout: 5s
+                retries: 5
+
+            dekart:
+              image: DEKART_IMAGE_PLACEHOLDER
+              restart: unless-stopped
+              depends_on:
+                db:
+                  condition: service_healthy
+              ports:
+                - "8080:8080"
+              environment:
+                DEKART_POSTGRES_DB: "dekart"
+                DEKART_POSTGRES_USER: "postgres"
+                DEKART_POSTGRES_PASSWORD: "dekart"
+                DEKART_POSTGRES_PORT: "5432"
+                DEKART_POSTGRES_HOST: "db"
+                DEKART_MAPBOX_TOKEN: "${DEKART_MAPBOX_TOKEN:-}"
+                DEKART_STORAGE: "${DEKART_STORAGE:-USER}"
+                DEKART_DATASOURCE: "${DEKART_DATASOURCE:-USER}"
+                DEKART_ALLOW_FILE_UPLOAD: "${DEKART_ALLOW_FILE_UPLOAD:-1}"
+                DEKART_CORS_ORIGIN: "${DEKART_CORS_ORIGIN:-http://localhost:3000}"
+                DEKART_LOG_DEBUG: "${DEKART_LOG_DEBUG:-0}"
+                DEKART_DEV_CLAIMS_EMAIL: "${DEKART_DEV_CLAIMS_EMAIL:-user@example.com}"
+              volumes:
+                - dekart_data:/dekart/data
+
+          volumes:
+            dekart_db_data:
+            dekart_data:
+          COMPOSE_EOF
+
+          # Replace placeholder with actual image
+          if [ "${{ inputs.push_to_registry }}" = "true" ]; then
+            IMAGE_REF="${{ fromJSON('{"oss":"dekartxyz/dekart","premium":"ghcr.io/dekart-xyz/dekart-premium","cloud":"europe-west3-docker.pkg.dev/dekart-cloud/dekart"}')[inputs.target] }}:${{ github.sha }}"
+          else
+            IMAGE_REF="dekartxyz/dekart:${{ github.sha }}"
+          fi
+          sed -i "s|DEKART_IMAGE_PLACEHOLDER|${IMAGE_REF}|g" ./output/docker-compose.yml
+
+          # Copy environment example file
+          cat > ./output/.env.example << 'ENV_EOF'
+          # Mapbox token for map visualization (required)
+          DEKART_MAPBOX_TOKEN=pk.your_mapbox_token_here
+
+          # Storage backend: USER, GCS, S3, SNOWFLAKE
+          DEKART_STORAGE=USER
+
+          # Datasource: USER, BQ, ATHENA, SNOWFLAKE, PG
+          DEKART_DATASOURCE=USER
+
+          # Allow file uploads (CSV, GeoJSON)
+          DEKART_ALLOW_FILE_UPLOAD=1
+
+          # CORS origin for development
+          DEKART_CORS_ORIGIN=http://localhost:3000
+
+          # Enable debug logging
+          DEKART_LOG_DEBUG=0
+
+          # Development email claim (for local testing without auth)
+          DEKART_DEV_CLAIMS_EMAIL=user@example.com
+          ENV_EOF
+
+          # Copy README with instructions
+          cat > ./output/README.md << 'README_EOF'
+          # Dekart Docker Compose Setup
+
+          This directory contains a ready-to-use Docker Compose configuration for running Dekart.
+
+          ## Quick Start
+
+          1. Copy the example environment file:
+             ```bash
+             cp .env.example .env
+             ```
+
+          2. Edit `.env` and set your Mapbox token (required for maps):
+             ```
+             DEKART_MAPBOX_TOKEN=pk.your_token_here
+             ```
+
+          3. Start the services:
+             ```bash
+             docker compose up -d
+             ```
+
+          4. Open http://localhost:8080 in your browser
+
+          ## Configuration Options
+
+          ### Storage Backends
+
+          - `USER` - Local storage (default, good for testing)
+          - `GCS` - Google Cloud Storage
+          - `S3` - Amazon S3
+          - `SNOWFLAKE` - Snowflake internal stage
+
+          ### Data Sources
+
+          - `USER` - File uploads only (CSV, GeoJSON)
+          - `BQ` - Google BigQuery
+          - `ATHENA` - AWS Athena
+          - `SNOWFLAKE` - Snowflake
+          - `PG` - PostgreSQL
+
+          ### Production Deployment
+
+          For production use, configure:
+          - External PostgreSQL database
+          - Cloud storage (GCS/S3) for query result caching
+          - Proper authentication (Google OAuth, OIDC, etc.)
+          - Valid license key (for premium features)
+
+          See the main repository documentation for detailed setup instructions.
+
+          ## Troubleshooting
+
+          - Check logs: `docker compose logs -f dekart`
+          - Restart services: `docker compose restart`
+          - Reset data: `docker compose down -v` (WARNING: deletes all data)
+          README_EOF
+
+      - name: Upload Docker Compose artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dekart-docker-compose-${{ inputs.target }}
+          path: ./output/
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Debug - List output files
+        run: |
+          echo "=== Output directory contents ==="
+          ls -la ./output/
+          echo "=== docker-compose.yml content ==="
+          cat ./output/docker-compose.yml
+          echo "=== .env.example content ==="
+          cat ./output/.env.example
+          echo "=== Docker image file size ==="
+          if [ -f dekart-${{ inputs.target }}.tar.gz ]; then
+            ls -lh dekart-${{ inputs.target }}.tar.gz
+          else
+            echo "Docker image tarball not found!"
+          fi
+
+      - name: Build Summary
+        run: |
+          echo "## Build Complete ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Target:** ${{ inputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Image Tag:** ${{ env.IMAGE_TAG }}" >> $GITHUB_STEP_SUMMARY
+          echo "**SHA:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.push_to_registry }}" = "true" ]; then
+            echo "📦 Image pushed to registry" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📦 Docker image saved as artifact" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Download Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker image: \`dekart-docker-image-${{ inputs.target }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker Compose files: \`dekart-docker-compose-${{ inputs.target }}\`" >> $GITHUB_STEP_SUMMARY

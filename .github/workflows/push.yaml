@@ -22,6 +22,7 @@ jobs:
     needs: [changes]
     uses: ./.github/workflows/go_test.yaml
     secrets: inherit
+    
   build_e2e:
     needs: [changes]
     uses: ./.github/workflows/build.yaml
@@ -33,6 +34,7 @@ jobs:
       contents: read
       packages: write
     secrets: inherit
+    
   e2e_tests:
     needs: [build_e2e]
     uses: ./.github/workflows/e2e.yaml
@@ -42,6 +44,7 @@ jobs:
       contents: read
       packages: write
     secrets: inherit
+    
   build_cloud:
     needs: [changes, build_e2e]
     uses: ./.github/workflows/build.yaml
@@ -53,6 +56,7 @@ jobs:
       contents: read
       packages: write
     secrets: inherit
+    
   create_pulumi_pr:
     needs: [e2e_tests, go_tests, node_tests, build_cloud]
     uses: ./.github/workflows/create-pulumi-pr.yaml
