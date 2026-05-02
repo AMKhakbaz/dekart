@@ -11,7 +11,7 @@ on:
       build_e2e: { type: boolean, default: false }
       build_runner_labels:
         type: string
-        default: '["self-hosted","laptop-build"]'
+        default: '["ubuntu-latest"]'
         description: "JSON array of runner labels for build job"
       # REQUIRED – explicit destination target
       target:
