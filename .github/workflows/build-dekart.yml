@@ -1,12 +1,16 @@
-name: Build and Save Dekart Docker Image
+name: Build Dekart with Docker Compose
 
 on:
-  workflow_dispatch: # Allows you to run the workflow manually from GitHub
-  # schedule:
-  #   - cron: '0 0 * * 0' # Optional: Runs automatically every week
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Docker Compose profile to build (oidc, cloud, googleoauth, etc.)'
+        required: true
+        default: 'oidc'
+        type: string
 
 jobs:
-  build-and-save:
+  build-docker-compose:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -33,26 +37,73 @@ jobs:
           DEKART_ALLOW_FILE_UPLOAD=1
           DEKART_STORAGE=GCS
           DEKART_DATASOURCE=BQ
+          OIDC_UPSTREAM=http://dekart-oidc:8080
           EOF
 
-      - name: Build Docker image
+      - name: Show Docker Compose configuration
+        run: |
+          echo "=== Docker Compose File ==="
+          cat docker-compose.yml
+          echo ""
+          echo "=== Environment File ==="
+          cat .env
+
+      - name: Build Docker image from Dockerfile
         run: |
           docker build --progress=plain -t dekart-custom:latest .
 
-      - name: Verify image was built
+      - name: Verify Docker image was built
         run: |
-          docker images | grep dekart-custom
+          echo "=== Docker Images ==="
+          docker images
+          echo ""
+          echo "=== Image History ==="
           docker history dekart-custom:latest
+
+      - name: Test Docker Compose configuration
+        run: |
+          docker compose --env-file .env --profile ${{ github.event.inputs.profile }} config
 
       - name: Save Docker image as tar.gz
         run: |
           docker save dekart-custom:latest | gzip > dekart-custom.tar.gz
+          echo "=== Saved Image Size ==="
           ls -lh dekart-custom.tar.gz
 
-      - name: Upload artifact
+      - name: Upload Docker image artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dekart-image
+          name: dekart-docker-image
           path: dekart-custom.tar.gz
           retention-days: 7
           if-no-files-found: error
+
+      - name: Upload Docker Compose file artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-compose-files
+          path: |
+            docker-compose.yml
+            .env
+          retention-days: 7
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Docker image built successfully: \`dekart-custom:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Docker Compose profile tested: \`${{ github.event.inputs.profile }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "- \`dekart-docker-image\`: Contains dekart-custom.tar.gz" >> $GITHUB_STEP_SUMMARY
+          echo "- \`docker-compose-files\`: Contains docker-compose.yml and .env" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Usage Instructions" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Download and extract the image" >> $GITHUB_STEP_SUMMARY
+          echo "docker load -i dekart-custom.tar.gz" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Run with Docker Compose" >> $GITHUB_STEP_SUMMARY
+          echo "docker compose --env-file .env --profile ${{ github.event.inputs.profile }} up" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
