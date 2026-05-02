@@ -1,8 +1,17 @@
 ```
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
 # Environment
 .env
 .env.local
-.env.*
+*.env.*
+
+# Editors
+.vscode/
+.idea/
 
 # Dependencies
 node_modules/
@@ -16,21 +25,22 @@ build/
 target/
 .gradle/
 
-# Editors
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs and temp files
-*.log
-*.tmp
-
-# System files
+# OS generated files
 .DS_Store
 Thumbs.db
 
-# Coverage
+# Compiled files
+*.pyc
+*.class
+*.o
+*.exe
+*.dll
+*.so
+*.a
+*.obj
+*.out
+
+# Coverage reports
 coverage/
 htmlcov/
 .coverage
